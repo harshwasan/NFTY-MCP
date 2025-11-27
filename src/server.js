@@ -18,23 +18,44 @@ const HYDRATE_IDLE_EXIT_MS = 1500;
 const SUBSCRIBE_IDLE_EXIT_MS = 60000;
 
 // Use a dedicated data directory in the user's home folder to avoid creating files in project roots
-const DATA_DIR = process.env.NTFY_DATA_DIR || path.join(os.homedir(), '.nfty-mcp-server');
+let DATA_DIR = process.env.NTFY_DATA_DIR || path.join(os.homedir(), '.nfty-mcp-server');
 
-// Ensure data directory exists
+// Ensure data directory exists, fall back to temp if it fails
 try {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
+  // Verify we can write to it
+  const testFile = path.join(DATA_DIR, '.test-write');
+  try {
+    fs.writeFileSync(testFile, 'test');
+    fs.unlinkSync(testFile);
+  } catch {
+    throw new Error('Cannot write to data directory');
+  }
 } catch (error) {
-  // If we can't create the directory, fall back to temp directory
-  console.error(`Warning: Could not create data directory ${DATA_DIR}, using temp directory instead`);
+  // If we can't create or write to the directory, fall back to temp directory
+  const fallbackDir = path.join(os.tmpdir(), 'nfty-mcp-server');
+  console.error(`Warning: Could not use data directory ${DATA_DIR} (${error.message}), using temp directory ${fallbackDir} instead`);
+  try {
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    DATA_DIR = fallbackDir;
+  } catch (fallbackError) {
+    console.error(`Fatal: Could not create fallback directory ${fallbackDir}: ${fallbackError.message}`);
+    process.exit(1);
+  }
 }
 
-const LOCK_PATH = path.join(DATA_DIR, 'nfty.lock');
-const MESSAGE_CACHE_PATH = path.resolve(
-  process.env.NTFY_CACHE_FILE || path.join(DATA_DIR, 'nfty-messages.json')
-);
-const PROCESS_LOG_PATH = path.join(DATA_DIR, 'nfty-process.log');
+// Log the data directory location for debugging
+console.error(`[nfty-mcp-server] Data directory: ${DATA_DIR}`);
+
+const LOCK_PATH = path.resolve(DATA_DIR, 'nfty.lock');
+const MESSAGE_CACHE_PATH = process.env.NTFY_CACHE_FILE 
+  ? path.resolve(process.env.NTFY_CACHE_FILE)
+  : path.resolve(DATA_DIR, 'nfty-messages.json');
+const PROCESS_LOG_PATH = path.resolve(DATA_DIR, 'nfty-process.log');
 
 // Configuration is loaded from environment variables set by mcp.json
 // The mcp.json file (typically at ~/.cursor/mcp.json or C:\Users\<user>\.cursor\mcp.json)
@@ -42,7 +63,7 @@ const PROCESS_LOG_PATH = path.join(DATA_DIR, 'nfty-process.log');
 // Priority: CLI args > environment variables (from mcp.json) > defaults
 
 // Diagnostic: Log all NTFY-related environment variables for debugging
-const debugLogFile = path.join(DATA_DIR, 'nfty-debug.log');
+const debugLogFile = path.resolve(DATA_DIR, 'nfty-debug.log');
 function debugLogSync(message, data = {}) {
   const line = `${new Date().toISOString()} ${message} ${JSON.stringify(data)}\n`;
   try {
@@ -1248,6 +1269,11 @@ function acquireLock() {
 debugLog('startup', {
   pid: process.pid,
   cwd: process.cwd(),
+  dataDir: DATA_DIR,
+  lockPath: LOCK_PATH,
+  cachePath: MESSAGE_CACHE_PATH,
+  processLogPath: PROCESS_LOG_PATH,
+  debugLogPath: debugLogFile,
   topic: config.topic || '(EMPTY - check mcp.json env section)',
   baseUrl: config.baseUrl,
   configSource: config.topic ? (cliArgs.topic ? 'CLI' : 'mcp.json (env)') : 'NOT CONFIGURED',
