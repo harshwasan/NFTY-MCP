@@ -293,6 +293,10 @@ MIT
 
 Contributions welcome! Please open an issue or submit a pull request.
 
+## Note
+
+This project was entirely vibe coded using AI - built organically through experimentation and iteration with AI assistance. 🎨🤖
+
 ## Links
 
 - [ntfy.sh Documentation](https://docs.ntfy.sh)
