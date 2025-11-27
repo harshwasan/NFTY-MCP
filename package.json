@@ -2,7 +2,7 @@
   "name": "@nfty/mcp-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "MCP server for sending and receiving messages through ntfy.sh with real-time subscriptions",
+  "description": "MCP server for sending and receiving messages through ntfy.sh with real-time subscriptions. Enables AI agents to communicate via push notifications.",
   "main": "src/server.js",
   "bin": {
     "nfty-mcp": "src/server.js"
