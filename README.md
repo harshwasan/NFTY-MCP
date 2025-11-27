@@ -16,13 +16,13 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that e
 ### Via npm (for MCP clients)
 
 ```bash
-npm install -g @nfty/mcp-server
+npm install -g nfty-mcp-server
 ```
 
 ### Via npx (no installation needed)
 
 ```bash
-npx @nfty/mcp-server
+npx nfty-mcp-server
 ```
 
 ## Quick Start
@@ -177,7 +177,7 @@ Read recent messages for the configured topic. Returns JSON:
 You can also pass configuration via CLI arguments:
 
 ```bash
-npx @nfty/mcp-server --topic my-topic --base-url https://ntfy.sh --auth-token your-token
+npx nfty-mcp-server --topic my-topic --base-url https://ntfy.sh --auth-token your-token
 ```
 
 Available arguments:
