@@ -28,12 +28,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/harshwasan/NFTY-Mcp.git"
+    "url": "https://github.com/harshwasan/NFTY-MCP.git"
   },
   "bugs": {
-    "url": "https://github.com/harshwasan/NFTY-Mcp/issues"
+    "url": "https://github.com/harshwasan/NFTY-MCP/issues"
   },
-  "homepage": "https://github.com/harshwasan/NFTY-Mcp#readme",
+  "homepage": "https://github.com/harshwasan/NFTY-MCP#readme",
   "engines": {
     "node": ">=18.0.0"
   },

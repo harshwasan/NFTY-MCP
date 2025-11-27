@@ -240,8 +240,8 @@ wait-and-read-inbox({
 
 ```bash
 # Clone the repository
-git clone https://github.com/harshwasan/NFTY-Mcp.git
-cd NFTY-Mcp
+git clone https://github.com/harshwasan/NFTY-MCP.git
+cd NFTY-MCP
 
 # Install dependencies
 npm install
@@ -256,7 +256,7 @@ npm run dev
 ### Project Structure
 
 ```
-NFTY-Mcp/
+NFTY-MCP/
 ├── src/
 │   └── server.js          # Main MCP server implementation
 ├── tests/
@@ -301,4 +301,4 @@ This project was entirely vibe coded using AI - built organically through experi
 
 - [ntfy.sh Documentation](https://docs.ntfy.sh)
 - [Model Context Protocol](https://modelcontextprotocol.io)
-- [GitHub Repository](https://github.com/harshwasan/NFTY-Mcp)
+- [GitHub Repository](https://github.com/harshwasan/NFTY-MCP)
