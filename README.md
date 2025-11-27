@@ -42,7 +42,7 @@ Add to your MCP settings (typically `~/.cursor/mcp.json` or `C:\Users\<user>\.cu
   "mcpServers": {
     "nfty": {
       "command": "npx",
-      "args": ["-y", "@nfty/mcp-server"],
+      "args": ["-y", "nfty-mcp-server"],
       "env": {
         "NTFY_TOPIC": "your-topic-name",
         "NTFY_BASE_URL": "https://ntfy.sh"
@@ -63,7 +63,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "nfty": {
       "command": "npx",
-      "args": ["-y", "@nfty/mcp-server"],
+      "args": ["-y", "nfty-mcp-server"],
       "env": {
         "NTFY_TOPIC": "your-topic-name",
         "NTFY_BASE_URL": "https://ntfy.sh"
