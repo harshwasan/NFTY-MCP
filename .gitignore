@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Logs and cache
+src/nfty-debug.log
+src/nfty-messages.json
+src/nfty-process.log
+src/nfty.lock
+
+# Test files
+test-send.js
+test-continuous.js
+fetch-recent-messages.js
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Build
+dist/
+build/
+

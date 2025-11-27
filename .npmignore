@@ -1,0 +1,30 @@
+# Source files (keep only what's needed)
+test-send.js
+test-continuous.js
+fetch-recent-messages.js
+tests/
+node_modules/
+
+# Logs and cache
+src/nfty-debug.log
+src/nfty-messages.json
+src/nfty-process.log
+src/nfty.lock
+
+# Development files
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Documentation (keep README)
+# README.md is included via "files" in package.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+

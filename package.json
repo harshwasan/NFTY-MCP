@@ -1,0 +1,53 @@
+{
+  "name": "@nfty/mcp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server for sending and receiving messages through ntfy.sh with real-time subscriptions",
+  "main": "src/server.js",
+  "bin": {
+    "nfty-mcp": "src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "NODE_ENV=development node src/server.js",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ntfy",
+    "notifications",
+    "messaging",
+    "real-time",
+    "subscription",
+    "cursor",
+    "claude",
+    "ai-agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harshwasan/NFTY-Mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harshwasan/NFTY-Mcp/issues"
+  },
+  "homepage": "https://github.com/harshwasan/NFTY-Mcp#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/server.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.22.0",
+    "undici": "^5.28.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.3"
+  }
+}
