@@ -158,6 +158,21 @@ Read recent messages for the configured topic. Returns JSON:
 
 ## Configuration
 
+### Data Storage
+
+The server stores its data files (logs, message cache, lock files) in a dedicated directory to avoid cluttering your project:
+
+- **Default location**: `~/.nfty-mcp-server/` (or `C:\Users\<user>\.nfty-mcp-server\` on Windows)
+- **Custom location**: Set `NTFY_DATA_DIR` environment variable to use a different directory
+
+**Files stored:**
+- `nfty-messages.json` - Cached messages
+- `nfty-debug.log` - Debug logs
+- `nfty-process.log` - Process management logs
+- `nfty.lock` - Lock file to prevent multiple instances
+
+**Note:** The server will automatically create this directory if it doesn't exist. Files are never created in your project root or in `node_modules`.
+
 ### Environment Variables
 
 | Variable | Description | Default |
@@ -171,6 +186,8 @@ Read recent messages for the configured topic. Returns JSON:
 | `NTFY_FETCH_TIMEOUT_MS` | Fetch timeout in milliseconds | `10000` |
 | `NTFY_CLEAN_ON_STARTUP` | Clear logs/cache on startup | `true` |
 | `NTFY_KILL_EXISTING` | Kill existing server instances | `true` |
+| `NTFY_DATA_DIR` | Directory for data files (logs, cache, lock) | `~/.nfty-mcp-server/` |
+| `NTFY_CACHE_FILE` | Custom path for message cache file | `{NTFY_DATA_DIR}/nfty-messages.json` |
 
 ### CLI Arguments
 

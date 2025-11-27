@@ -5,6 +5,7 @@ import dns from 'node:dns';
 import { Agent } from 'undici';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { z } from 'zod';
@@ -15,11 +16,25 @@ const DEFAULT_HYDRATE_MIN_MS = 0;
 const DEFAULT_HYDRATE_BACKOFF_MS = 2000; // quick retry on rate limit
 const HYDRATE_IDLE_EXIT_MS = 1500;
 const SUBSCRIBE_IDLE_EXIT_MS = 60000;
-const LOCK_PATH = fileURLToPath(new URL('./nfty.lock', import.meta.url));
+
+// Use a dedicated data directory in the user's home folder to avoid creating files in project roots
+const DATA_DIR = process.env.NTFY_DATA_DIR || path.join(os.homedir(), '.nfty-mcp-server');
+
+// Ensure data directory exists
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (error) {
+  // If we can't create the directory, fall back to temp directory
+  console.error(`Warning: Could not create data directory ${DATA_DIR}, using temp directory instead`);
+}
+
+const LOCK_PATH = path.join(DATA_DIR, 'nfty.lock');
 const MESSAGE_CACHE_PATH = path.resolve(
-  process.env.NTFY_CACHE_FILE || fileURLToPath(new URL('./nfty-messages.json', import.meta.url))
+  process.env.NTFY_CACHE_FILE || path.join(DATA_DIR, 'nfty-messages.json')
 );
-const PROCESS_LOG_PATH = fileURLToPath(new URL('./nfty-process.log', import.meta.url));
+const PROCESS_LOG_PATH = path.join(DATA_DIR, 'nfty-process.log');
 
 // Configuration is loaded from environment variables set by mcp.json
 // The mcp.json file (typically at ~/.cursor/mcp.json or C:\Users\<user>\.cursor\mcp.json)
@@ -27,7 +42,7 @@ const PROCESS_LOG_PATH = fileURLToPath(new URL('./nfty-process.log', import.meta
 // Priority: CLI args > environment variables (from mcp.json) > defaults
 
 // Diagnostic: Log all NTFY-related environment variables for debugging
-const debugLogFile = fileURLToPath(new URL('./nfty-debug.log', import.meta.url));
+const debugLogFile = path.join(DATA_DIR, 'nfty-debug.log');
 function debugLogSync(message, data = {}) {
   const line = `${new Date().toISOString()} ${message} ${JSON.stringify(data)}\n`;
   try {
