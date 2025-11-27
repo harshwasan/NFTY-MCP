@@ -278,7 +278,7 @@ messageVersion = recentMessages.length;
 const mcpServer = new McpServer(
   {
     name: 'nfty-mcp',
-    version: '1.0.0'
+    version: '1.0.6'
   },
   {
     instructions:
@@ -1018,6 +1018,58 @@ function normalizeBaseUrl(value) {
 }
 
 function parseCliArgs(argv) {
+  // Handle --help and --version flags early
+  if (argv.includes('--help') || argv.includes('-h')) {
+    console.log(`
+nfty-mcp-server - MCP server for sending and receiving messages through ntfy.sh
+
+Usage:
+  npx nfty-mcp-server [options]
+
+Options:
+  --topic <topic>          Topic name (required, or set NTFY_TOPIC in mcp.json)
+  --base-url <url>         Base URL for ntfy server (default: https://ntfy.sh)
+  --server <url>           Alias for --base-url
+  --auth-token <token>     Bearer token for protected topics
+  --username <user>        Username for basic auth
+  --password <pass>         Password for basic auth
+  --since <cursor>         Initial backlog cursor (default: 0s)
+  --log-incoming           Log all incoming messages
+  --help, -h               Show this help message
+  --version, -v            Show version
+
+Environment Variables (set in mcp.json):
+  NTFY_TOPIC               Topic name (required)
+  NTFY_BASE_URL            Base URL for ntfy server
+  NTFY_AUTH_TOKEN          Bearer token
+  NTFY_USERNAME            Username for basic auth
+  NTFY_PASSWORD            Password for basic auth
+  NTFY_DATA_DIR            Custom data directory (default: ~/.nfty-mcp-server)
+
+Example mcp.json configuration:
+{
+  "mcpServers": {
+    "nfty": {
+      "command": "npx",
+      "args": ["-y", "nfty-mcp-server"],
+      "env": {
+        "NTFY_TOPIC": "your-topic-name",
+        "NTFY_BASE_URL": "https://ntfy.sh"
+      }
+    }
+  }
+}
+
+For more information, visit: https://github.com/harshwasan/NFTY-MCP
+`);
+    process.exit(0);
+  }
+  
+  if (argv.includes('--version') || argv.includes('-v')) {
+    console.log('1.0.6');
+    process.exit(0);
+  }
+
   const args = {};
   for (let i = 0; i < argv.length; i++) {
     const current = argv[i];
