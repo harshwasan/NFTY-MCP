@@ -54,9 +54,5 @@
   "bundledDependencies": [
     "ajv",
     "ajv-formats"
-  ],
-  "bundleDependencies": [
-    "ajv",
-    "ajv-formats"
   ]
 }
