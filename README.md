@@ -1,6 +1,25 @@
 # NTFY MCP Server
 
-An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that enables AI agents to send and receive messages through [ntfy.sh](https://ntfy.sh) with real-time subscriptions. Perfect for building AI agents that can communicate via push notifications.
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that enables AI agents to send and receive messages through [ntfy.sh](https://ntfy.sh) with real-time subscriptions. Perfect for building AI agents that can communicate via push notifications and enabling bidirectional chat workflows.
+
+## Intended Use Case
+
+This server was designed to enable **bidirectional communication** between you and AI agents through a shared ntfy topic. The typical workflow is:
+
+1. **You send a message** to the ntfy topic (via the ntfy.sh web interface, mobile app, or API)
+2. **The AI agent receives it** through the `wait-and-read-inbox` tool or `ntfy://inbox` resource
+3. **The AI agent responds** using the `send-ntfy` tool
+4. **You receive the response** as a push notification on your device
+5. **The cycle continues** - you can reply, and the AI will wait for your next message
+
+This creates an **asynchronous chat interface** where you can communicate with AI agents at your own pace, receiving push notifications when they respond, and they can wait for your replies even if you take hours or days to respond.
+
+**Important for Chat Workflows:** The MCP protocol has a client-side timeout of approximately 60 seconds. When using `wait-and-read-inbox` for chat, you may need to:
+- **Tell the AI to retry** the `wait-and-read-inbox` call if it times out without receiving a message
+- **Configure the AI** to automatically retry after timeouts when waiting for your response
+- **Use a prompt** that instructs the AI to keep waiting until it gets a response, retrying as needed
+
+The AI agent can keep retrying `wait-and-read-inbox` indefinitely until it receives your message, making this suitable for long-running conversations where responses may take hours or days.
 
 ## Features
 
@@ -118,20 +137,28 @@ Change the ntfy topic for this session (no restart needed).
 
 #### `wait-and-read-inbox`
 
-Wait for new messages on the configured topic (set in mcp.json) and return any that arrive. Uses the existing subscription.
+Wait for new messages on the configured topic (set in mcp.json) and return when a new message arrives. Does not return until at least one new message is received. Uses the existing subscription.
+
+**Note:** The MCP protocol has a ~60s client-side timeout that cannot be controlled from the server, but this tool will wait as long as possible within that limit.
 
 **Parameters:**
-- `delaySeconds` (optional, default: 20): Seconds to wait between checks
-- `maxTries` (optional, default: 1): Maximum number of attempts
-- `since` (optional): Message ID or cursor to start from
-- `sinceTime` (optional): Unix timestamp - only return messages with time >= sinceTime
-- `sinceNow` (optional, default: true): Filter to only messages sent after this call
+- `since` (optional): Cursor to filter messages after this point
+- `sinceTime` (optional): Unix timestamp - filter messages with time >= sinceTime
+- `sinceNow` (optional, default: true): If true (default), only returns messages sent after this call starts. If false, returns all messages since the cursor.
+
+**Timeout Behavior for Chat Workflows:**
+
+When using this for bidirectional chat, the tool may timeout after ~60 seconds if no message arrives. To handle this:
+
+1. **Configure the AI to retry:** Tell the AI agent to automatically retry `wait-and-read-inbox` when it times out if it's waiting for your response
+2. **Use a prompt:** Create a prompt that instructs the AI to "keep waiting for a response, retrying wait-and-read-inbox if it times out"
+3. **Manual retry:** You can manually ask the AI to try again if it times out
+
+The AI can keep retrying indefinitely until it receives your message, making this suitable for long-running conversations.
 
 **Example:**
 ```json
 {
-  "delaySeconds": 5,
-  "maxTries": 10,
   "sinceNow": true
 }
 ```
@@ -219,11 +246,12 @@ Available arguments:
 
 ## Use Cases
 
+- 💬 **Bidirectional Chat**: Chat with AI agents asynchronously via push notifications - send messages when convenient, receive responses as notifications
 - 🤖 **AI Agent Communication**: Enable AI agents to send and receive notifications
 - 📱 **Push Notifications**: Send push notifications from AI workflows
 - 🔔 **Alert Systems**: Create alert systems that AI agents can interact with
 - 💬 **Message Queues**: Use as a simple message queue for AI agent coordination
-- 🔄 **Bidirectional Communication**: Enable two-way communication between AI agents and external systems
+- 🔄 **Long-running Workflows**: Enable workflows where the AI waits for human input that may take hours or days
 
 ## Examples
 
@@ -238,7 +266,7 @@ Available arguments:
 }
 ```
 
-### Example: Wait for User Response
+### Example: Chat Workflow
 
 ```javascript
 // AI agent sends a question (topic is configured in mcp.json)
@@ -248,12 +276,17 @@ send-ntfy({
 })
 
 // Then waits for response (uses topic from mcp.json)
+// Note: If this times out (~60s), the AI should retry until it gets a response
 wait-and-read-inbox({
-  delaySeconds: 5,
-  maxTries: 10,
   sinceNow: true
 })
 ```
+
+**For reliable chat workflows**, configure your AI with a prompt like:
+
+> "When waiting for a user response via wait-and-read-inbox, if the call times out without receiving a message, automatically retry the wait-and-read-inbox call. Keep retrying until you receive a response from the user."
+
+This ensures the AI will continue waiting for your reply even if individual calls timeout.
 
 ## Development
 
@@ -317,6 +350,16 @@ Contributions welcome! Please open an issue or submit a pull request.
 ## Note
 
 This is a hobby personal project I made using AI and vibe coding - built organically through experimentation and iteration with AI assistance. 🎨🤖
+
+## Why Runkit Shows "Unavailable"
+
+[Runkit](https://runkit.com/npm/nfty-mcp-server) may show this package as unavailable because:
+
+1. **CLI Tool**: This is primarily a CLI tool designed to run as an MCP server, not a library with exportable functions
+2. **No Default Export**: The package doesn't export functions that can be easily imported and used in Runkit's sandbox environment
+3. **MCP Protocol**: It's designed to communicate via the MCP protocol with MCP clients (like Cursor, Claude Desktop), not to be executed directly in a browser-like environment
+
+This is expected behavior - the package is intended to be used as an MCP server, not as a runnable script in Runkit. Use it via `npx` or install it globally as described in the Installation section.
 
 ## Links
 
