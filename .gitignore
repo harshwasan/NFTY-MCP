@@ -32,3 +32,6 @@ Thumbs.db
 dist/
 build/
 
+# NPM package tarballs
+*.tgz
+
