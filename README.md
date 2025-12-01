@@ -42,7 +42,7 @@ Add to your MCP settings (typically `~/.cursor/mcp.json` or `C:\Users\<user>\.cu
   "mcpServers": {
     "nfty": {
       "command": "npx",
-      "args": ["-y", "nfty-mcp-server"],
+      "args": ["-y", "--yes", "nfty-mcp-server"],
       "env": {
         "NTFY_TOPIC": "your-topic-name",
         "NTFY_BASE_URL": "https://ntfy.sh"
@@ -53,6 +53,8 @@ Add to your MCP settings (typically `~/.cursor/mcp.json` or `C:\Users\<user>\.cu
 ```
 
 **Note:** `NTFY_TOPIC` is required. Set it in the `env` section of mcp.json.
+
+**Important:** The `--yes` flag ensures npx installs the package in its cache directory instead of your project directory, preventing dependencies from being installed in your project's `node_modules`.
 
 #### For Claude Desktop
 
@@ -63,7 +65,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "nfty": {
       "command": "npx",
-      "args": ["-y", "nfty-mcp-server"],
+      "args": ["-y", "--yes", "nfty-mcp-server"],
       "env": {
         "NTFY_TOPIC": "your-topic-name",
         "NTFY_BASE_URL": "https://ntfy.sh"
@@ -74,6 +76,8 @@ Add to `claude_desktop_config.json`:
 ```
 
 **Note:** `NTFY_TOPIC` is required. Set it in the `env` section of mcp.json.
+
+**Important:** The `--yes` flag ensures npx installs the package in its cache directory instead of your project directory, preventing dependencies from being installed in your project's `node_modules`.
 
 ### 3. Restart your MCP client
 

@@ -13,7 +13,7 @@ Your MCP configuration file should be at:
   "mcpServers": {
     "nfty": {
       "command": "npx",
-      "args": ["-y", "nfty-mcp-server"],
+      "args": ["-y", "--yes", "nfty-mcp-server"],
       "env": {
         "NTFY_TOPIC": "2824KUb14oXUJkuR",
         "NTFY_BASE_URL": "https://ntfy.sh"
@@ -22,6 +22,8 @@ Your MCP configuration file should be at:
   }
 }
 ```
+
+**Note:** The `--yes` flag ensures npx installs the package in its cache directory instead of the current project directory. This prevents dependencies from being installed in your project's `node_modules`.
 
 ## Troubleshooting Steps
 
@@ -64,4 +66,8 @@ Your MCP configuration file should be at:
 npm install -g nfty-mcp-server@latest
 # or if using npx, it will auto-update
 ```
+
+
+
+
 

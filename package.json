@@ -1,6 +1,6 @@
 {
   "name": "nfty-mcp-server",
-  "version": "1.0.12",
+  "version": "1.0.34",
   "type": "module",
   "description": "MCP server for sending and receiving messages through ntfy.sh with real-time subscriptions. Enables AI agents to communicate via push notifications.",
   "bin": {
@@ -36,6 +36,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "preferGlobal": true,
+  "main": "src/server.js",
+  "exports": {
+    ".": "./src/server.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "src/server.js",
     "README.md",
@@ -44,15 +50,11 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.23.0",
     "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
+    "ajv-formats": "3.0.1",
     "undici": "^5.28.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "vitest": "^2.1.3"
-  },
-  "bundledDependencies": [
-    "ajv",
-    "ajv-formats"
-  ]
+  }
 }

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// Ensure ajv-formats is available before importing @modelcontextprotocol/sdk
+// This fixes module resolution issues with npx
+import 'ajv-formats';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import dns from 'node:dns';
@@ -56,6 +59,7 @@ const MESSAGE_CACHE_PATH = process.env.NTFY_CACHE_FILE
   ? path.resolve(process.env.NTFY_CACHE_FILE)
   : path.resolve(DATA_DIR, 'nfty-messages.json');
 const PROCESS_LOG_PATH = path.resolve(DATA_DIR, 'nfty-process.log');
+const SUBSCRIPTION_STATE_PATH = path.resolve(DATA_DIR, 'nfty-subscription-state.json');
 
 // Configuration is loaded from environment variables set by mcp.json
 // The mcp.json file (typically at ~/.cursor/mcp.json or C:\Users\<user>\.cursor\mcp.json)
@@ -145,6 +149,7 @@ let releaseLock = null;
 const messageWaiters = new Set();
 let subscriptionTask = null;
 let subscriptionId = null; // Track subscription ID to avoid duplicates
+let subscriptionStartTime = null; // Track when subscription started
 let messageVersion = 0;
 let processLogEntryId = null;
 let processLogClosed = false;
@@ -176,10 +181,17 @@ function cleanOnStartup() {
       debugLogSync('clean:messages-cache', { action: 'cleared' });
     }
     
+    // Clear subscription state
+    if (fs.existsSync(SUBSCRIPTION_STATE_PATH)) {
+      fs.writeFileSync(SUBSCRIPTION_STATE_PATH, '{}');
+      debugLogSync('clean:subscription-state', { action: 'cleared' });
+    }
+    
     debugLogSync('clean:complete', { 
       debugLog: true, 
       processLog: true, 
-      messagesCache: true 
+      messagesCache: true,
+      subscriptionState: true
     });
     wasCleanedOnStartup = true;
   } catch (error) {
@@ -275,10 +287,16 @@ cleanOnStartup();
 loadCachedMessages();
 messageVersion = recentMessages.length;
 
+// Load subscription state on startup (for reference, but subscription will be recreated if needed)
+const previousSubscriptionState = loadSubscriptionState();
+if (previousSubscriptionState) {
+  debugLog('startup:previous-subscription', previousSubscriptionState);
+}
+
 const mcpServer = new McpServer(
   {
     name: 'nfty-mcp',
-    version: '1.0.6'
+    version: '1.0.34'
   },
   {
     instructions:
@@ -448,20 +466,72 @@ mcpServer.registerResource('inbox', inboxUri, {
   };
 });
 
+// Register prompts - reusable conversation templates
+// Trying alternative approaches to work around SDK compatibility issues
+
+// Approach 1: Simple prompt with no argsSchema (no arguments)
+mcpServer.registerPrompt(
+  'check-inbox',
+  {
+    title: 'Check recent messages',
+    description: 'Checks the ntfy inbox for recent messages without waiting.'
+  },
+  async () => {
+    if (!config.topic) {
+      return {
+        messages: [
+          {
+            role: 'user',
+            content: {
+              type: 'text',
+              text: 'Error: Topic not configured. Set NTFY_TOPIC in mcp.json env section.'
+            }
+          }
+        ]
+      };
+    }
+
+    const promptText = `Please check the ntfy inbox for recent messages.
+
+Use the ntfy://inbox resource to read recent messages for the configured topic.
+Present the messages in a clear format, showing:
+- Message title (if any)
+- Message content (prefixed with "Agent:" if it's a reply)
+- Timestamp
+- Message ID
+
+If there are no messages, let me know.`;
+
+    return {
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: promptText
+          }
+        }
+      ]
+    };
+  }
+);
+
+// Note: Prompts with argsSchema cause SDK errors (Cannot read properties of null reading '_zod')
+// This appears to be a bug in @modelcontextprotocol/sdk when processing Zod schemas for prompts
+// For now, we only support prompts without arguments (no argsSchema)
+// Users can still use the tools directly for more complex workflows
+
 mcpServer.registerTool(
   'wait-and-read-inbox',
   {
-    title: 'Wait, then read ntfy inbox',
-    description: 'Wait for new messages on the configured topic (set in mcp.json) and return any that arrived. Uses the existing subscription. Returns newCount - check if newCount > 0 before proceeding with tasks that require a response.',
+    title: 'Wait for new messages',
+    description: 'Waits for new messages on the configured topic (set in mcp.json) and returns when a new message arrives. Does not return until at least one new message is received. Uses the existing subscription. Note: The MCP protocol has a ~60s client-side timeout that cannot be controlled from the server, but this tool will wait as long as possible within that limit.',
     inputSchema: z.object({
-      delaySeconds: z.number().int().min(1).max(600).default(20),
-      maxTries: z.number().int().min(1).max(10).default(1),
-      since: z.string().optional(),
-      sinceTime: z.number().optional().describe('Unix timestamp - filter messages with time >= sinceTime (filtered in code, not in subscription)'),
-      sinceNow: z.boolean().optional().default(true).describe('If true (default), filter to only messages sent after this call starts (filtered in code, not in subscription)')
+      since: z.string().optional().describe('Cursor to filter messages after this point'),
+      sinceTime: z.number().optional().describe('Unix timestamp - filter messages with time >= sinceTime'),
+      sinceNow: z.boolean().optional().default(true).describe('If true (default), only returns messages sent after this call starts. If false, returns all messages since the cursor.')
     }),
     outputSchema: z.object({
-      attempts: z.number(),
       newCount: z.number(),
       lastCursor: z.string().nullable(),
       messages: z.array(
@@ -477,7 +547,7 @@ mcpServer.registerTool(
       )
     })
   },
-  async ({ delaySeconds = 20, maxTries = 1, since, sinceTime, sinceNow = true }) => {
+  async ({ since, sinceTime, sinceNow = true }) => {
     if (!config.topic) {
       throw new Error('Topic not configured. Set NTFY_TOPIC in mcp.json env section.');
     }
@@ -486,57 +556,106 @@ mcpServer.registerTool(
       lastCursor = since;
     }
 
-    // Keep total wait under protocol request timeout (~60s). Cap tries if needed.
-    const maxWaitMs = 55000;
-    const delayMs = delaySeconds * 1000;
-    const effectiveTries = Math.max(1, Math.min(maxTries, Math.floor(maxWaitMs / delayMs) || 1));
-
     // Use existing subscription if available, otherwise create one
-    // Check if subscription is actually running (task exists and hasn't completed)
+    // Check if subscription is actually running (task exists and has an ID)
     const subscriptionRunning = subscriptionTask && subscriptionId;
     if (!subscriptionRunning) {
+      // No subscription running - create one
       ensureSubscription();
+      // Give subscription a moment to start and potentially receive any pending messages
+      await new Promise(resolve => setTimeout(resolve, 1000));
       debugLog('wait:created-subscription', { topic: config.topic, subscriptionId });
     } else {
-      debugLog('wait:using-existing-subscription', { topic: config.topic, subscriptionId });
+      // Subscription already running - just use it, don't close/reopen
+      debugLog('wait:using-existing-subscription', { topic: config.topic, subscriptionId, messageCount: recentMessages.length });
     }
 
+    // Capture the start time for sinceNow filtering
+    const startTime = Math.floor(Date.now() / 1000);
     const baselineVersion = messageVersion;
     const baselineCursor = lastCursor;
-    let attempts = 0;
 
-    for (let i = 0; i < effectiveTries; i++) {
-      attempts++;
-      await waitForNewMessages(baselineVersion, delayMs);
-      if (messageVersion > baselineVersion) {
-        break;
+    // First, check immediately if there are already new messages available
+    // This allows the agent to poll the tool repeatedly, and it will return immediately
+    // if messages are already waiting, or wait for new ones if not
+    let newMessages = [];
+    const allMessages = messagesFromCache(baselineCursor, sinceTime);
+    
+    // Filter by sinceNow if provided
+    if (sinceNow) {
+      newMessages = allMessages.filter(msg => msg.time && msg.time >= startTime);
+    } else {
+      newMessages = allMessages;
+    }
+    
+    // If we already have new messages, return them immediately (no waiting needed)
+    if (newMessages.length > 0) {
+      debugLog('wait:immediate-return', { count: newMessages.length, topic: config.topic });
+    } else {
+      // No messages available yet - wait for new ones
+      // Wait indefinitely for new messages - check every 1 second
+      // Note: The MCP protocol has a ~60s client-side timeout that we cannot control,
+      // but we'll wait as long as possible until a message arrives or the protocol times out
+      const checkInterval = 1000; // Check every 1 second
+      const startWaitTime = Date.now();
+      
+      debugLog('wait:starting-wait', { topic: config.topic, baselineCursor, startTime });
+      
+      // Wait indefinitely until we get a message (or MCP protocol timeout ~60s cuts us off)
+      while (true) {
+        // Always read from cache to get the latest messages (cache is updated in real-time via subscription)
+        const currentMessages = messagesFromCache(baselineCursor, sinceTime);
+        
+        // Filter by sinceNow if provided
+        if (sinceNow) {
+          newMessages = currentMessages.filter(msg => msg.time && msg.time >= startTime);
+        } else {
+          newMessages = currentMessages;
+        }
+        
+        // If we found new messages, return them immediately
+        if (newMessages.length > 0) {
+          debugLog('wait:message-received', { count: newMessages.length, waitTime: Math.floor((Date.now() - startWaitTime) / 1000), topic: config.topic });
+          break;
+        }
+        
+        // Wait a bit before checking again
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
       }
     }
-
-    // Get all messages since baseline cursor, then filter in code
-    let newMessages = messagesSinceCursor(baselineCursor);
     
-    // Filter by sinceTime or sinceNow if provided (filter in code, not in subscription)
-    if (sinceTime !== undefined && sinceTime !== null) {
-      newMessages = newMessages.filter(msg => msg.time && msg.time >= sinceTime);
-    } else if (sinceNow) {
-      // Filter to only messages sent after this call started
-      const effectiveSinceTime = Math.floor(Date.now() / 1000);
-      newMessages = newMessages.filter(msg => msg.time && msg.time >= effectiveSinceTime);
-      debugLog('wait:filtered-sinceNow', { effectiveSinceTime, count: newMessages.length });
+    // Format message content for display
+    let messageText = '';
+    if (newMessages.length > 0) {
+      messageText = `Received ${newMessages.length} new message(s):\n\n`;
+      newMessages.forEach((msg, idx) => {
+        messageText += `Message ${idx + 1}:\n`;
+        if (msg.title) messageText += `Title: ${msg.title}\n`;
+        if (msg.message) {
+          // Only prefix with "Agent:" if message has title or priority (indicating it was sent via tool)
+          // User messages typically don't have title/priority
+          const isAgentMessage = msg.title || msg.priority;
+          messageText += isAgentMessage ? `Agent: ${msg.message}\n` : `Message: ${msg.message}\n`;
+        }
+        if (msg.time) messageText += `Time: ${new Date(msg.time * 1000).toISOString()}\n`;
+        if (msg.id) messageText += `ID: ${msg.id}\n`;
+        messageText += '\n';
+      });
+    } else {
+      // This should never happen since we break the loop only when messages are found
+      // But include it as a safety fallback
+      const waitDuration = Math.floor((Date.now() - startWaitTime) / 1000);
+      messageText = `No new messages received after waiting ${waitDuration}s. The MCP protocol may have timed out (~60s limit).`;
     }
+
     return {
       content: [
         {
           type: 'text',
-          text:
-            newMessages.length > 0
-              ? `Found ${newMessages.length} new message(s) after ${attempts} attempt(s).`
-              : `No new messages after ${attempts} attempt(s). Total wait ~${attempts * delaySeconds}s.`
+          text: messageText
         }
       ],
       structuredContent: {
-        attempts,
         newCount: newMessages.length,
         lastCursor: lastCursor || null,
         messages: newMessages
@@ -730,21 +849,60 @@ async function hydrateFromServer(options = {}) {
   }
 }
 
+function saveSubscriptionState() {
+  try {
+    const state = {
+      subscriptionId: subscriptionId || null,
+      topic: config.topic || null,
+      status: subscriptionTask && subscriptionId ? 'running' : 'stopped',
+      hasTask: subscriptionTask !== null,
+      startTime: subscriptionStartTime || null,
+      lastUpdate: new Date().toISOString()
+    };
+    fs.writeFileSync(SUBSCRIPTION_STATE_PATH, JSON.stringify(state, null, 2));
+    debugLog('subscription:state-saved', state);
+  } catch (error) {
+    debugLog('subscription:state-save-error', { error: String(error) });
+  }
+}
+
+function loadSubscriptionState() {
+  try {
+    if (!fs.existsSync(SUBSCRIPTION_STATE_PATH)) {
+      return null;
+    }
+    const raw = fs.readFileSync(SUBSCRIPTION_STATE_PATH, 'utf8');
+    if (!raw.trim()) {
+      return null;
+    }
+    const state = JSON.parse(raw);
+    debugLog('subscription:state-loaded', state);
+    return state;
+  } catch (error) {
+    debugLog('subscription:state-load-error', { error: String(error) });
+    return null;
+  }
+}
+
 function ensureSubscription() {
   if (!config.topic || shuttingDown) {
     return;
   }
-  if (subscriptionTask) {
+  // If subscription is already running, don't close it - just return it
+  if (subscriptionTask && subscriptionId) {
+    // Check if the subscription task is still active (not completed)
     debugLog('subscribe:already-running', { topic: config.topic, subscriptionId });
+    saveSubscriptionState(); // Update state
     return subscriptionTask;
   }
 
-  // Stop any existing subscription first
-  stopSubscription();
+  // Don't stop existing subscription - just create a new one if needed
+  // The subscription should stay open and not be closed/reopened
 
   const controller = new AbortController();
   pollAbortController = controller;
   subscriptionId = crypto.randomUUID();
+  subscriptionStartTime = new Date().toISOString();
   const currentSubscriptionId = subscriptionId;
 
   subscriptionTask = (async () => {
@@ -814,12 +972,16 @@ function ensureSubscription() {
         subscriptionTask = null;
         pollAbortController = null;
         subscriptionId = null;
+        subscriptionStartTime = null;
+        saveSubscriptionState(); // Update state when subscription stops
       } else {
         debugLog('subscribe:cleanup-skipped', { topic: config.topic, subscriptionId: currentSubscriptionId, currentId: subscriptionId });
       }
     }
   })();
 
+  // Save state when subscription starts
+  saveSubscriptionState();
   return subscriptionTask;
 }
 
@@ -834,7 +996,14 @@ function stopSubscription() {
     subscriptionTask.catch(() => {}).finally(() => {
       subscriptionTask = null;
       subscriptionId = null;
+      subscriptionStartTime = null;
+      saveSubscriptionState(); // Update state when subscription is stopped
     });
+  } else {
+    // No task, but still update state
+    subscriptionId = null;
+    subscriptionStartTime = null;
+    saveSubscriptionState();
   }
 }
 
@@ -918,6 +1087,53 @@ function notifyWaiters() {
   for (const waiter of [...messageWaiters]) {
     waiter();
   }
+}
+
+// Read messages from the file cache (same format as the resource)
+function messagesFromCache(cursor, sinceTime) {
+  let cachedMessages = [];
+  try {
+    if (fs.existsSync(MESSAGE_CACHE_PATH)) {
+      const raw = fs.readFileSync(MESSAGE_CACHE_PATH, 'utf8');
+      if (raw.trim()) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          cachedMessages = parsed;
+        }
+      }
+    }
+  } catch (error) {
+    debugLog('cache:read-error', { error: String(error) });
+    return [];
+  }
+
+  let messages;
+  if (!cursor) {
+    messages = [...cachedMessages];
+  } else {
+    const stopIndex = cachedMessages.findIndex((message) => cursorForMessage(message) === cursor);
+    if (stopIndex === -1) {
+      messages = [...cachedMessages];
+    } else {
+      messages = cachedMessages.slice(0, stopIndex);
+    }
+  }
+  
+  // Filter by timestamp if provided (only messages with time >= sinceTime)
+  if (sinceTime !== undefined && sinceTime !== null) {
+    messages = messages.filter(msg => msg.time && msg.time >= sinceTime);
+  }
+  
+  // Normalize messages to ensure all schema-required fields are present (null if missing)
+  return messages.map(msg => ({
+    id: msg.id ?? null,
+    time: msg.time ?? null,
+    title: msg.title ?? null,
+    message: msg.message ?? null,
+    priority: msg.priority ?? null,
+    tags: msg.tags ?? null,
+    topic: msg.topic ?? null
+  }));
 }
 
 function messagesSinceCursor(cursor, sinceTime) {
@@ -1066,7 +1282,7 @@ For more information, visit: https://github.com/harshwasan/NFTY-MCP
   }
   
   if (argv.includes('--version') || argv.includes('-v')) {
-    console.log('1.0.6');
+    console.log('1.0.34');
     process.exit(0);
   }
 
@@ -1131,7 +1347,8 @@ async function switchTopic(newTopic, newBaseUrl) {
   lastCursor = config.since;
   hydrateBackoffUntil = 0;
   lastHydrateAt = 0;
-  stopSubscription();
+  // Don't stop subscription - just ensure a new one is created for the new topic
+  // The old subscription will naturally close when the topic changes
   ensureSubscription();
 }
 
@@ -1325,6 +1542,7 @@ debugLog('startup', {
   lockPath: LOCK_PATH,
   cachePath: MESSAGE_CACHE_PATH,
   processLogPath: PROCESS_LOG_PATH,
+  subscriptionStatePath: SUBSCRIPTION_STATE_PATH,
   debugLogPath: debugLogFile,
   topic: config.topic || '(EMPTY - check mcp.json env section)',
   baseUrl: config.baseUrl,
