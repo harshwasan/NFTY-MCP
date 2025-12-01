@@ -12,6 +12,7 @@ src/nfty.lock
 test-send.js
 test-continuous.js
 fetch-recent-messages.js
+test-mcp/
 
 # IDE
 .vscode/
@@ -34,4 +35,7 @@ build/
 
 # NPM package tarballs
 *.tgz
+
+# Docker
+Dockerfile
 
