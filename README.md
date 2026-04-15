@@ -256,14 +256,6 @@ Connection problems:
 - verify network access to the configured `NTFY_BASE_URL`
 - verify authentication settings if the topic is protected
 
-## Recommended Improvements
-
-The repository would benefit from:
-
-- a short architecture diagram
-- a release changelog
-- a screenshot or example of a real notification flow in use
-
 ## License
 
 MIT
