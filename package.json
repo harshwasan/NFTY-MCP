@@ -2,7 +2,7 @@
   "name": "nfty-mcp-server",
   "version": "1.0.35",
   "type": "module",
-  "description": "MCP server for bidirectional AI agent communication via ntfy.sh push notifications. Send messages, receive real-time responses, and chat with AI agents through a shared topic. Perfect for async workflows, notifications, and agent-to-agent communication. Note: For chat workflows, configure the AI to retry wait-and-read-inbox calls when they timeout (~60s MCP limit).",
+  "description": "MCP server for ntfy.sh notifications, asynchronous agent messaging, and human-in-the-loop workflows.",
   "bin": {
     "nfty-mcp-server": "src/server.js"
   },
@@ -21,7 +21,8 @@
     "subscription",
     "cursor",
     "claude",
-    "ai-agent"
+    "agent-tooling",
+    "human-in-the-loop"
   ],
   "author": "",
   "license": "MIT",
